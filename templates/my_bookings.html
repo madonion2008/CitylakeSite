@@ -1,0 +1,32 @@
+
+<!DOCTYPE html>
+<html lang="uk">
+<head><meta charset="UTF-8"><title>Мої бронювання</title></head>
+<body>
+<h1>Мої бронювання</h1>
+<form method="post">
+    <label>Телефон / Telegram ID: <input type="text" name="contact" required></label>
+    <button type="submit">Показати</button>
+</form>
+{% if bookings %}
+<table>
+<thead><tr><th>Дата</th><th>Час</th><th>Ім'я</th><th>Дія</th></tr></thead>
+<tbody>
+{% for id, date, time, name in bookings %}
+<tr>
+<td>{{date}}</td><td>{{time}}</td><td>{{name}}</td>
+<td>
+<form action="{{ url_for('cancel_booking', booking_id=id) }}" method="post" style="display:inline">
+<button type="submit">Скасувати</button>
+</form>
+</td>
+</tr>
+{% endfor %}
+</tbody>
+</table>
+{% elif contact %}
+<p>Бронювань не знайдено для {{contact}}</p>
+{% endif %}
+<a href="/">Повернутися на головну</a>
+</body>
+</html>
