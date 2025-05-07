@@ -50,7 +50,8 @@
             const events = res.data.map(ev => ({
               ...ev,
               color: 'green',
-              display: 'background'
+              display: 'background',
+              allDay: true
             }));
             successCallback(events);
           });
