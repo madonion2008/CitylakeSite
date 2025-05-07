@@ -3,6 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <title>Альтанка в City Lake</title>
+  <!-- Supabase JS як ES-модуль -->
   <script type="module">
     import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
 
@@ -12,11 +13,15 @@
     window.supabase = supabase;
 
     window.addEventListener('DOMContentLoaded', async () => {
+      // Отримуємо поточну сесію
       const { data: { session } } = await supabase.auth.getSession();
       if (session) {
-        document.getElementById('auth').style.display='none';
-        document.getElementById('app').style.display='block';
-        initCalendar(session.access_token);
+        // Встановлюємо axios-заголовок на весь час роботи сторінки
+        axios.defaults.headers.common['Authorization'] = 'Bearer ' + session.access_token;
+
+        document.getElementById('auth').style.display = 'none';
+        document.getElementById('app').style.display  = 'block';
+        initCalendar();
       }
     });
   </script>
@@ -24,10 +29,9 @@
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css" rel="stylesheet">
   <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-
   <style>
     body { font-family: Arial; margin:20px; }
-    #app { display:none; }
+    #app  { display:none; }
     #calendar { max-width:600px; margin:0 auto; }
   </style>
 </head>
@@ -35,7 +39,7 @@
 
   <div id="auth">
     <h2>Увійдіть або зареєструйтесь</h2>
-    <input id="email" type="email" placeholder="Email"><br>
+    <input id="email"    type="email"    placeholder="Email"><br>
     <input id="password" type="password" placeholder="Пароль"><br>
     <button id="btn-signup">Зареєструватися</button>
     <button id="btn-signin">Увійти</button>
@@ -45,48 +49,112 @@
     <h1>Альтанка в City Lake</h1>
     <button id="btn-signout">Вийти</button>
     <div id="calendar"></div>
-    <!-- форма бронювання і кнопки тут -->
+
+    <div id="form" style="display:none; margin-top:20px;">
+      <h3>Бронювання</h3>
+      <p>Дата: <span id="selected-date"></span></p>
+      <form id="bookingForm">
+        <input type="hidden" id="bdate" name="date">
+        <label>Час початку:
+          <select id="startTime"></select>
+        </label>
+        <label>Час кінця:
+          <select id="endTime"></select>
+        </label>
+        <label>Ім'я:
+          <input type="text" id="bname" name="name" required>
+        </label>
+        <label>Контакт:
+          <input type="text" id="bcontact" name="contact" required>
+        </label>
+        <button type="submit">Забронювати</button>
+        <button type="button" id="cancelBtn">Відмінити</button>
+      </form>
+    </div>
   </div>
 
   <script type="module">
     const { auth } = window.supabase;
+
+    // Елементи
     const btnUp = document.getElementById('btn-signup'),
           btnIn = document.getElementById('btn-signin'),
           btnOut= document.getElementById('btn-signout');
 
+    // Реєстрація і вхід
     btnUp.onclick = async () => {
-      const email= document.getElementById('email').value;
-      const pass = document.getElementById('password').value;
+      const email = document.getElementById('email').value;
+      const pass  = document.getElementById('password').value;
       const { error } = await auth.signUp({ email, password: pass });
-      error ? alert(error.message) : alert('Перевірте пошту для підтвердження');
+      alert(error ? error.message : 'Перевірте пошту для підтвердження');
     };
-
     btnIn.onclick = async () => {
-      const email= document.getElementById('email').value;
-      const pass = document.getElementById('password').value;
+      const email = document.getElementById('email').value;
+      const pass  = document.getElementById('password').value;
       const { data, error } = await auth.signInWithPassword({ email, password: pass });
-      if (error) return alert(error.message);
-      document.getElementById('auth').style.display='none';
-      document.getElementById('app').style.display='block';
-      initCalendar(data.session.access_token);
+      if (error) { alert(error.message); return; }
+      // Після успішного логіну — встановлюємо заголовок
+      axios.defaults.headers.common['Authorization'] = 'Bearer ' + data.session.access_token;
+      document.getElementById('auth').style.display = 'none';
+      document.getElementById('app').style.display  = 'block';
+      initCalendar();
     };
-
     btnOut.onclick = async () => {
       await auth.signOut();
-      document.getElementById('app').style.display='none';
-      document.getElementById('auth').style.display='block';
+      document.getElementById('app').style.display  = 'none';
+      document.getElementById('auth').style.display = 'block';
     };
 
-    function initCalendar(token) {
-      axios.defaults.headers.common['Authorization'] = 'Bearer '+token;
-      const calendarEl = document.getElementById('calendar');
-      new FullCalendar.Calendar(calendarEl, {
+    function initCalendar() {
+      // Заповнення селектів часу
+      const startSelect = document.getElementById('startTime'),
+            endSelect   = document.getElementById('endTime');
+      for(let h=9; h<=21; h++){
+        for(let m=0; m<60; m+=15){
+          const t=('0'+h).slice(-2)+':'+('0'+m).slice(-2);
+          [startSelect,endSelect].forEach(sel=>{
+            const o=document.createElement('option'); o.value=o.text=t; sel.appendChild(o);
+          });
+        }
+      }
+
+      const calEl = document.getElementById('calendar');
+      let selectedDate;
+      const calendar = new FullCalendar.Calendar(calEl, {
         initialView: 'dayGridMonth',
-        events: (_, cb) => axios.get('/api/bookings').then(r => cb(r.data)),
-        // dateClick, eventClick тощо
-      }).render();
+        dateClick: info => {
+          selectedDate = info.dateStr;
+          document.getElementById('bdate').value = selectedDate;
+          document.getElementById('selected-date').innerText = selectedDate;
+          document.getElementById('form').style.display = 'block';
+        },
+        events: (_, cb) =>
+          axios.get('/api/bookings').then(r => cb(r.data))
+      });
+      calendar.render();
+
+      // Обробка форми бронювання
+      document.getElementById('bookingForm').addEventListener('submit', e => {
+        e.preventDefault();
+        const payload = {
+          date: document.getElementById('bdate').value,
+          time: startSelect.value + '–' + endSelect.value,
+          name: document.getElementById('bname').value,
+          contact: document.getElementById('bcontact').value
+        };
+        // axios вже має Authorization-заголовок
+        axios.post('/book', payload)
+          .then(() => {
+            window.location.href =
+              `/export_ics?date=${payload.date}&time=${payload.time}&name=${payload.name}`;
+          })
+          .catch(() => alert('Цей слот вже зайнятий'));
+      });
+
+      document.getElementById('cancelBtn').addEventListener('click', () => {
+        document.getElementById('form').style.display = 'none';
+      });
     }
   </script>
-
 </body>
 </html>
