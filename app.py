@@ -1,26 +1,24 @@
-from flask import Flask, render_template, request, jsonify, send_file
+import os
 import sqlite3
+import re
+from flask import Flask, render_template, request, jsonify, send_file, redirect, url_for
 from ics import Calendar, Event
 from datetime import datetime
-import re
 from io import BytesIO
 
 app = Flask(__name__)
 
-# Ініціалізація бази даних
 def init_db():
     conn = sqlite3.connect('bookings.db')
     c = conn.cursor()
-    c.execute('''
-        CREATE TABLE IF NOT EXISTS bookings (
-            id INTEGER PRIMARY KEY,
-            date TEXT,
-            time TEXT,
-            name TEXT,
-            contact TEXT
-        )''')
+    c.execute('''CREATE TABLE IF NOT EXISTS bookings
+                 (id INTEGER PRIMARY KEY, date TEXT, time TEXT, name TEXT, contact TEXT)''')
     conn.commit()
     conn.close()
+
+@app.before_first_request
+def initialize():
+    init_db()
 
 @app.route('/')
 def index():
@@ -33,91 +31,82 @@ def get_bookings():
     c.execute('SELECT date, time FROM bookings')
     rows = c.fetchall()
     conn.close()
-    events = [
-        {
-            'title': 'Зайнято',
-            'start': f"{row[0]}T{row[1].split('–')[0]}",
-            'end':   f"{row[0]}T{row[1].split('–')[1]}",
+    events = []
+    for row in rows:
+        parts = re.split(r'[–-]', row[1])
+        start, end = parts[0].strip(), parts[1].strip() if len(parts) >= 2 else ('00:00','00:00')
+        events.append({
+            'start': f"{row[0]}T{start}",
+            'end': f"{row[0]}T{end}",
             'display': 'background',
             'backgroundColor': 'green',
             'allDay': True
-        }
-        for row in rows
-    ]
+        })
     return jsonify(events)
-
-# Новий маршрут для повних даних бронювань
-@app.route('/api/bookings_full')
-def get_bookings_full():
-    conn = sqlite3.connect('bookings.db')
-    c = conn.cursor()
-    c.execute('SELECT date, time, name, contact FROM bookings')
-    rows = c.fetchall()
-    conn.close()
-    resp = [
-        {'date': r[0], 'time': r[1], 'name': r[2], 'contact': r[3]}
-        for r in rows
-    ]
-    return jsonify(resp)
 
 @app.route('/book', methods=['POST'])
 def book():
-    data    = request.get_json() or request.form
-    date    = data.get('date')
-    time    = data.get('time')  # "15:00–18:00" або "15:00-18:00"
-    name    = data.get('name')
+    data = request.get_json() or request.form
+    date = data.get('date')
+    time = data.get('time')
+    name = data.get('name')
     contact = data.get('contact')
-
     conn = sqlite3.connect('bookings.db')
-    c    = conn.cursor()
-    # Перевірка конфлікту
+    c = conn.cursor()
     c.execute('SELECT COUNT(*) FROM bookings WHERE date=? AND time=?', (date, time))
     if c.fetchone()[0] > 0:
         conn.close()
         return 'taken', 400
-
-    # Запис бронювання
-    c.execute(
-        'INSERT INTO bookings(date, time, name, contact) VALUES (?, ?, ?, ?)',
-        (date, time, name, contact)
-    )
+    c.execute('INSERT INTO bookings(date, time, name, contact) VALUES(?,?,?,?)',
+              (date, time, name, contact))
     conn.commit()
     conn.close()
     return 'ok'
 
 @app.route('/export_ics')
 def export_ics():
-    date    = request.args.get('date')
-    time    = request.args.get('time')
-    name    = request.args.get('name')
-    contact = request.args.get('contact')
-
-    # Розбиваємо час за дефісом чи en-dash
+    date = request.args.get('date')
+    time = request.args.get('time')
+    name = request.args.get('name')
     parts = re.split(r'[–-]', time)
     if len(parts) < 2:
         return 'Invalid time format', 400
-    start_time, end_time = parts[0].strip(), parts[1].strip()
-
-    # Генерація ICS з правильними datetime
-    cal      = Calendar()
-    e        = Event()
-    e.name   = f"Альтанка в City Lake — {name}"
-    fmt      = "%Y-%m-%d %H:%M"
-    dt_start = datetime.strptime(f"{date} {start_time}", fmt)
-    dt_end   = datetime.strptime(f"{date} {end_time}",   fmt)
-    e.begin  = dt_start
-    e.end    = dt_end
+    start, end = parts[0].strip(), parts[1].strip()
+    fmt = "%Y-%m-%d %H:%M"
+    dt_start = datetime.strptime(f"{date} {start}", fmt)
+    dt_end = datetime.strptime(f"{date} {end}", fmt)
+    cal = Calendar()
+    e = Event()
+    e.name = f"Альтанка в City Lake — {name}"
+    e.begin = dt_start
+    e.end = dt_end
     cal.events.add(e)
-
     buf = BytesIO(str(cal).encode('utf-8'))
     buf.seek(0)
-    return send_file(
-        buf,
-        as_attachment=True,
-        download_name='booking.ics',
-        mimetype='text/calendar'
-    )
+    return send_file(buf, as_attachment=True, download_name='booking.ics', mimetype='text/calendar')
+
+@app.route('/my_bookings', methods=['GET','POST'])
+def my_bookings():
+    bookings = None
+    contact = None
+    if request.method == 'POST':
+        contact = request.form.get('contact')
+        conn = sqlite3.connect('bookings.db')
+        c = conn.cursor()
+        c.execute('SELECT id, date, time, name FROM bookings WHERE contact=?', (contact,))
+        bookings = c.fetchall()
+        conn.close()
+    return render_template('my_bookings.html', bookings=bookings, contact=contact)
+
+@app.route('/cancel/<int:booking_id>', methods=['POST'])
+def cancel_booking(booking_id):
+    conn = sqlite3.connect('bookings.db')
+    c = conn.cursor()
+    c.execute('DELETE FROM bookings WHERE id=?', (booking_id,))
+    conn.commit()
+    conn.close()
+    return redirect(request.referrer or url_for('index'))
 
 if __name__ == '__main__':
-    init_db()
-    app.run(host='0.0.0.0', port=5000)
+    port = int(os.environ.get('PORT', 5000))
+    app.run(host='0.0.0.0', port=port)
