@@ -1,0 +1,66 @@
+
+<!DOCTYPE html>
+<html lang="uk">
+<head>
+<meta charset="UTF-8">
+<title>Альтанка в City Lake</title>
+<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css" rel="stylesheet">
+<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
+<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+<style>
+  body { font-family: Arial, sans-serif; margin: 20px; }
+  #calendar { max-width: 600px; margin: 0 auto; }
+  #form { display:none; margin-top:20px; }
+  label { display:block; margin:5px 0; }
+</style>
+</head>
+<body>
+<h1>Альтанка в City Lake</h1>
+<div id="calendar"></div>
+<div id="form">
+  <h3>Бронювання</h3>
+  <form id="bookingForm">
+    <input type="hidden" id="bdate" name="date">
+    <label>Час (15:00–18:00): <input type="text" id="btime" name="time" required></label>
+    <label>Ім'я: <input type="text" id="bname" name="name" required></label>
+    <label>Телефон / Telegram ID: <input type="text" id="bcontact" name="contact" required></label>
+    <button type="submit">Забронювати</button>
+    <button type="button" id="cancelBtn">Відмінити</button>
+  </form>
+</div>
+<script>
+document.addEventListener('DOMContentLoaded', function() {
+  var calendarEl = document.getElementById('calendar');
+  var selectedDate;
+  var calendar = new FullCalendar.Calendar(calendarEl, {
+    initialView: 'dayGridMonth',
+    dateClick: function(info) {
+      selectedDate = info.dateStr;
+      document.getElementById('bdate').value = selectedDate;
+      document.getElementById('form').style.display = 'block';
+    },
+    events: function(fetchInfo, successCallback, failureCallback) {
+      axios.get('/api/bookings').then(res => { successCallback(res.data); });
+    }
+  });
+  calendar.render();
+  document.getElementById('bookingForm').addEventListener('submit', function(e) {
+    e.preventDefault();
+    var payload = {
+      date: document.getElementById('bdate').value,
+      time: document.getElementById('btime').value,
+      name: document.getElementById('bname').value,
+      contact: document.getElementById('bcontact').value
+    };
+    axios.post('/book', payload)
+      .then(() => { window.location.href = '/export_ics?date=' + payload.date + '&time=' + payload.time + '&name=' + payload.name;}
+                 )
+      .catch(() => { alert('Цей слот вже зайнятий'); });
+  });
+  document.getElementById('cancelBtn').addEventListener('click', function() {
+    document.getElementById('form').style.display = 'none';
+  });
+});
+</script>
+</body>
+</html>
