@@ -18,8 +18,7 @@ def init_db():
             time TEXT,
             name TEXT,
             contact TEXT
-        )
-    ''')
+        )''')
     conn.commit()
     conn.close()
 
@@ -39,11 +38,27 @@ def get_bookings():
             'title': 'Зайнято',
             'start': f"{row[0]}T{row[1].split('–')[0]}",
             'end':   f"{row[0]}T{row[1].split('–')[1]}",
-            'allDay': False
+            'display': 'background',
+            'backgroundColor': 'green',
+            'allDay': True
         }
         for row in rows
     ]
     return jsonify(events)
+
+# Новий маршрут для повних даних бронювань
+@app.route('/api/bookings_full')
+def get_bookings_full():
+    conn = sqlite3.connect('bookings.db')
+    c = conn.cursor()
+    c.execute('SELECT date, time, name, contact FROM bookings')
+    rows = c.fetchall()
+    conn.close()
+    resp = [
+        {'date': r[0], 'time': r[1], 'name': r[2], 'contact': r[3]}
+        for r in rows
+    ]
+    return jsonify(resp)
 
 @app.route('/book', methods=['POST'])
 def book():
