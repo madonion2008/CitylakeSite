@@ -9,16 +9,20 @@
   <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
     body { font-family: Arial, sans-serif; margin: 20px; }
+    #controls { margin-bottom: 15px; }
     #calendar { max-width: 600px; margin: 0 auto; }
-    #form { display: none; margin-top: 20px; }
+    #form, #bookingsContainer { display: none; margin-top: 20px; }
     label { display: block; margin: 5px 0; }
     select, input, button { padding: 8px; margin-top: 5px; width: 100%; box-sizing: border-box; }
-    button { cursor: pointer; }
+    button { cursor: pointer; margin-right: 10px; }
     #selectedDateDisplay { font-weight: bold; margin-bottom: 10px; }
   </style>
 </head>
 <body>
   <h1>Альтанка в City Lake</h1>
+  <div id="controls">
+    <button id="viewBookingsBtn">Переглянути бронювання</button>
+  </div>
   <div id="calendar"></div>
   <div id="form">
     <h3>Бронювання</h3>
@@ -37,6 +41,7 @@
       <button type="button" id="cancelBtn">Відмінити</button>
     </form>
   </div>
+  <div id="bookingsContainer"></div>
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
@@ -65,13 +70,14 @@
           document.getElementById('bdate').value = selectedDate;
           document.getElementById('displayDate').innerText = selectedDate;
           document.getElementById('form').style.display = 'block';
+          document.getElementById('bookingsContainer').style.display = 'none';
         },
         events: function(fetchInfo, successCallback) {
           axios.get('/api/bookings').then(res => {
             const events = res.data.map(ev => ({
               ...ev,
-              color: 'green',
               display: 'background',
+              backgroundColor: 'green',
               allDay: true
             }));
             successCallback(events);
@@ -80,6 +86,22 @@
       });
       calendar.render();
 
+      // Показати список бронювань
+      document.getElementById('viewBookingsBtn').addEventListener('click', function() {
+        axios.get('/api/bookings_full').then(res => {
+          let html = '<h3>Активні бронювання</h3><ul>';
+          res.data.forEach(b => {
+            html += `<li>${b.date} ${b.time} — ${b.name} (${b.contact})</li>`;
+          });
+          html += '</ul>';
+          const container = document.getElementById('bookingsContainer');
+          container.innerHTML = html;
+          container.style.display = 'block';
+          document.getElementById('form').style.display = 'none';
+        });
+      });
+
+      // Обробка форми бронювання
       document.getElementById('bookingForm').addEventListener('submit', function(e) {
         e.preventDefault();
         const start = document.getElementById('btime_start').value;
