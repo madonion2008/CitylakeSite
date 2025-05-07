@@ -1,95 +1,104 @@
-
 <!DOCTYPE html>
 <html lang="uk">
 <head>
-<meta charset="UTF-8">
-<title>Альтанка в City Lake</title>
-<link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css" rel="stylesheet">
-<script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
-<script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
-<style>
-  body { font-family: Arial, sans-serif; margin: 20px; }
-  #calendar { max-width: 600px; margin: 0 auto; }
-  #form { display:none; margin-top:20px; }
-  label { display:block; margin:5px 0; }
-  #selected-date { font-weight: bold; }
-</style>
+  <meta charset="UTF-8">
+  <title>Альтанка в City Lake</title>
+  <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css" rel="stylesheet">
+  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
+  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
+  <style>
+    body { font-family: Arial, sans-serif; margin: 20px; }
+    #calendar { max-width: 600px; margin: 0 auto; }
+    #form { display:none; margin-top:20px; }
+    label { display:block; margin:5px 0; }
+    #selected-date { font-weight: bold; }
+  </style>
 </head>
 <body>
-<h1>Альтанка в City Lake</h1>
-<a href="/my_bookings"><button>Переглянути мої бронювання</button></a>
-<div id="calendar"></div>
-<div id="form">
-  <h3>Бронювання</h3>
-  <p>Дата: <span id="selected-date"></span></p>
-  <form id="bookingForm">
-    <input type="hidden" id="bdate" name="date">
-    <label>Час початку:
-      <select id="startTime" name="timeStart"></select>
-    </label>
-    <label>Час кінця:
-      <select id="endTime" name="timeEnd"></select>
-    </label>
-    <label>Ім'я: <input type="text" id="bname" name="name" required></label>
-    <label>Телефон / Telegram ID: <input type="text" id="bcontact" name="contact" required></label>
-    <button type="submit">Забронювати</button>
-    <button type="button" id="cancelBtn">Відмінити</button>
-  </form>
-</div>
-<script>
-document.addEventListener('DOMContentLoaded', function() {
-  const startSelect = document.getElementById('startTime');
-  const endSelect = document.getElementById('endTime');
-  for(let h=9; h<=21; h++){
-    for(let m=0; m<60; m+=15){
-      const time = ('0'+h).slice(-2)+':'+('0'+m).slice(-2);
-      [startSelect, endSelect].forEach(sel => {
-        const opt = document.createElement('option');
-        opt.value = time;
-        opt.text = time;
-        sel.appendChild(opt);
-      });
-    }
-  }
+  <h1>Альтанка в City Lake</h1>
+  <a href="/my_bookings"><button>Переглянути мої бронювання</button></a>
+  <div id="calendar"></div>
 
-  var calendarEl = document.getElementById('calendar');
-  var selectedDate;
-  var calendar = new FullCalendar.Calendar(calendarEl, {
-    initialView: 'dayGridMonth',
-    dateClick: function(info) {
-      selectedDate = info.dateStr;
-      document.getElementById('bdate').value = selectedDate;
-      document.getElementById('selected-date').innerText = selectedDate;
-      document.getElementById('form').style.display = 'block';
-    },
-    events: function(fetchInfo, successCallback, failureCallback) {
-      axios.get('/api/bookings').then(res => {
-        successCallback(res.data);
-      });
-    }
-  });
-  calendar.render();
+  <div id="form">
+    <h3>Бронювання</h3>
+    <p>Дата: <span id="selected-date"></span></p>
+    <form id="bookingForm">
+      <input type="hidden" id="bdate" name="date">
+      <label>Час початку:
+        <select id="startTime" required></select>
+      </label>
+      <label>Час кінця:
+        <select id="endTime" required></select>
+      </label>
+      <label>Ім'я: <input type="text" id="bname" name="name" required></label>
+      <label>Телефон / Telegram ID: <input type="text" id="bcontact" name="contact" required></label>
+      <button type="submit">Забронювати</button>
+      <button type="button" id="cancelBtn">Відмінити</button>
+    </form>
+  </div>
 
-  document.getElementById('bookingForm').addEventListener('submit', function(e) {
-    e.preventDefault();
-    const payload = {
-      date: document.getElementById('bdate').value,
-      time: document.getElementById('startTime').value + '–' + document.getElementById('endTime').value,
-      name: document.getElementById('bname').value,
-      contact: document.getElementById('bcontact').value
-    };
-    axios.post('/book', payload)
-      .then(() => {
-        window.location.href = '/export_ics?date=' + payload.date + '&time=' + payload.time + '&name=' + payload.name;
-      })
-      .catch(() => {
-        alert('Цей слот вже зайнятий');
-      });
+  <script>
+  document.addEventListener('DOMContentLoaded', function() {
+    // Підготовка селектів часу
+    const startSelect = document.getElementById('startTime');
+    const endSelect   = document.getElementById('endTime');
+    for (let h = 9; h <= 21; h++) {
+      for (let m = 0; m < 60; m += 15) {
+        const time = ('0'+h).slice(-2) + ':' + ('0'+m).slice(-2);
+        [startSelect, endSelect].forEach(sel => {
+          const opt = document.createElement('option');
+          opt.value = time;
+          opt.text  = time;
+          sel.appendChild(opt);
+        });
+      }
+    }
+
+    // Ініціалізація календаря
+    const calendarEl = document.getElementById('calendar');
+    let selectedDate;
+    const calendar = new FullCalendar.Calendar(calendarEl, {
+      initialView: 'dayGridMonth',
+      dateClick: info => {
+        selectedDate = info.dateStr;
+        document.getElementById('bdate').value = selectedDate;
+        document.getElementById('selected-date').innerText = selectedDate;
+        document.getElementById('form').style.display = 'block';
+      },
+      events: (fetchInfo, successCallback) => {
+        axios.get('/api/bookings').then(res => successCallback(res.data));
+      },
+      eventClick: info => {
+        const ev = info.event;
+        const name    = ev.title;
+        const time    = ev.extendedProps.time;
+        const contact = ev.extendedProps.contact;
+        alert(`Забронював(ла): ${name}\nЧас: ${time}\nКонтакт: ${contact}`);
+      }
+    });
+    calendar.render();
+
+    // Обробка форми бронювання
+    document.getElementById('bookingForm').addEventListener('submit', e => {
+      e.preventDefault();
+      const payload = {
+        date:   document.getElementById('bdate').value,
+        time:   startSelect.value + '–' + endSelect.value,
+        name:   document.getElementById('bname').value,
+        contact:document.getElementById('bcontact').value
+      };
+      axios.post('/book', payload)
+        .then(() => {
+          window.location.href =
+            `/export_ics?date=${payload.date}&time=${payload.time}&name=${payload.name}`;
+        })
+        .catch(() => alert('Цей слот вже зайнятий'));
+    });
+
+    document.getElementById('cancelBtn').addEventListener('click', () => {
+      document.getElementById('form').style.display = 'none';
+    });
   });
-  document.getElementById('cancelBtn').addEventListener('click', function() {
-    document.getElementById('form').style.display = 'none';
-  });
-});
-</script>
+  </script>
 </body>
 </html>
