@@ -1,0 +1,8 @@
+services:
+  - type: web
+    name: altanka-citylake
+    env: docker
+    dockerfilePath: Dockerfile
+    # Який порт слухати в контейнері
+    ports:
+      - 5000
