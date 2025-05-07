@@ -28,35 +28,46 @@ def index():
 def get_bookings():
     conn = sqlite3.connect('bookings.db')
     c = conn.cursor()
-    c.execute('SELECT date, time FROM bookings')
+    # вибираємо всі поля
+    c.execute('SELECT date, time, name, contact FROM bookings')
     rows = c.fetchall()
     conn.close()
+
     events = []
-    for row in rows:
-        parts = re.split(r'[–-]', row[1])
-        start, end = parts[0].strip(), parts[1].strip() if len(parts) >= 2 else ('00:00','00:00')
+    for date, time, name, contact in rows:
+        # розбиваємо час на start/end
+        parts = re.split(r'[–-]', time)
+        start = parts[0].strip()
+        end   = parts[1].strip() if len(parts) >= 2 else start
+
         events.append({
-            'start': f"{row[0]}T{start}",
-            'end': f"{row[0]}T{end}",
-            'display': 'background',
-            'backgroundColor': 'green',
-            'allDay': True
+            'title': name,                  # ім'я показуємо як заголовок події
+            'start': f"{date}T{start}",
+            'end':   f"{date}T{end}",
+            'color': 'green',               # фон події
+            'extendedProps': {
+                'contact': contact,
+                'time': time
+            }
         })
+
     return jsonify(events)
 
 @app.route('/book', methods=['POST'])
 def book():
     data = request.get_json() or request.form
-    date = data.get('date')
-    time = data.get('time')
-    name = data.get('name')
+    date    = data.get('date')
+    time    = data.get('time')
+    name    = data.get('name')
     contact = data.get('contact')
+
     conn = sqlite3.connect('bookings.db')
     c = conn.cursor()
     c.execute('SELECT COUNT(*) FROM bookings WHERE date=? AND time=?', (date, time))
     if c.fetchone()[0] > 0:
         conn.close()
         return 'taken', 400
+
     c.execute('INSERT INTO bookings(date, time, name, contact) VALUES(?,?,?,?)',
               (date, time, name, contact))
     conn.commit()
@@ -65,25 +76,29 @@ def book():
 
 @app.route('/export_ics')
 def export_ics():
-    date = request.args.get('date')
-    time = request.args.get('time')
-    name = request.args.get('name')
-    parts = re.split(r'[–-]', time)
+    date    = request.args.get('date')
+    time    = request.args.get('time')
+    name    = request.args.get('name')
+    parts   = re.split(r'[–-]', time)
     if len(parts) < 2:
         return 'Invalid time format', 400
     start, end = parts[0].strip(), parts[1].strip()
     fmt = "%Y-%m-%d %H:%M"
     dt_start = datetime.strptime(f"{date} {start}", fmt)
-    dt_end = datetime.strptime(f"{date} {end}", fmt)
+    dt_end   = datetime.strptime(f"{date} {end}",   fmt)
+
     cal = Calendar()
-    e = Event()
-    e.name = f"Альтанка в City Lake — {name}"
+    e   = Event()
+    e.name  = f"Альтанка в City Lake — {name}"
     e.begin = dt_start
-    e.end = dt_end
+    e.end   = dt_end
     cal.events.add(e)
+
     buf = BytesIO(str(cal).encode('utf-8'))
     buf.seek(0)
-    return send_file(buf, as_attachment=True, download_name='booking.ics', mimetype='text/calendar')
+    return send_file(buf, as_attachment=True,
+                     download_name='booking.ics',
+                     mimetype='text/calendar')
 
 @app.route('/my_bookings', methods=['GET','POST'])
 def my_bookings():
