@@ -12,7 +12,7 @@
     #calendar { max-width: 600px; margin: 0 auto; }
     #form { display: none; margin-top: 20px; }
     label { display: block; margin: 5px 0; }
-    input, button { padding: 8px; margin-top: 5px; width: 100%; box-sizing: border-box; }
+    select, input, button { padding: 8px; margin-top: 5px; width: 100%; box-sizing: border-box; }
     button { cursor: pointer; }
     #selectedDateDisplay { font-weight: bold; margin-bottom: 10px; }
   </style>
@@ -25,7 +25,12 @@
     <div id="selectedDateDisplay">Дата: <span id="displayDate"></span></div>
     <form id="bookingForm">
       <input type="hidden" id="bdate" name="date">
-      <label>Час (15:00–18:00):<input type="text" id="btime" name="time" required></label>
+      <label>Час початку:
+        <select id="btime_start" name="time_start" required></select>
+      </label>
+      <label>Час кінця:
+        <select id="btime_end" name="time_end" required></select>
+      </label>
       <label>Ім'я:<input type="text" id="bname" name="name" required></label>
       <label>Телефон / Telegram ID:<input type="text" id="bcontact" name="contact" required></label>
       <button type="submit">Забронювати</button>
@@ -35,6 +40,22 @@
 
   <script>
     document.addEventListener('DOMContentLoaded', function() {
+      // Генерація списку часу з кроком 15 хвилин
+      function generateTimeOptions(selectEl) {
+        const pad = n => n.toString().padStart(2,'0');
+        for (let h = 0; h < 24; h++) {
+          for (let m = 0; m < 60; m += 15) {
+            const timeStr = `${pad(h)}:${pad(m)}`;
+            const option = document.createElement('option');
+            option.value = timeStr;
+            option.textContent = timeStr;
+            selectEl.appendChild(option);
+          }
+        }
+      }
+      generateTimeOptions(document.getElementById('btime_start'));
+      generateTimeOptions(document.getElementById('btime_end'));
+
       var calendarEl = document.getElementById('calendar');
       var selectedDate;
       var calendar = new FullCalendar.Calendar(calendarEl, {
@@ -61,18 +82,20 @@
 
       document.getElementById('bookingForm').addEventListener('submit', function(e) {
         e.preventDefault();
+        const start = document.getElementById('btime_start').value;
+        const end   = document.getElementById('btime_end').value;
         const payload = {
           date: document.getElementById('bdate').value,
-          time: document.getElementById('btime').value,
+          time: `${start}–${end}`,
           name: document.getElementById('bname').value,
           contact: document.getElementById('bcontact').value
         };
         axios.post('/book', payload)
           .then(() => {
             window.location.href = '/export_ics'
-              + '?date='   + encodeURIComponent(payload.date)
-              + '&time='   + encodeURIComponent(payload.time)
-              + '&name='   + encodeURIComponent(payload.name)
+              + '?date='    + encodeURIComponent(payload.date)
+              + '&time='    + encodeURIComponent(payload.time)
+              + '&name='    + encodeURIComponent(payload.name)
               + '&contact=' + encodeURIComponent(payload.contact);
           })
           .catch(() => { alert('Цей слот вже зайнятий'); });
