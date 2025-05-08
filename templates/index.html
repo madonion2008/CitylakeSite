@@ -3,40 +3,19 @@
 <head>
   <meta charset="UTF-8">
   <title>Альтанка в City Lake</title>
-  <!-- Supabase JS як ES-модуль -->
-  <script type="module">
-    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
-
-    const SUPABASE_URL     = "{{ supabase_url }}";
-    const SUPABASE_ANON_KEY= "{{ supabase_anon }}";
-    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
-    window.supabase = supabase;
-
-    window.addEventListener('DOMContentLoaded', async () => {
-      // Отримуємо поточну сесію
-      const { data: { session } } = await supabase.auth.getSession();
-      if (session) {
-        // Встановлюємо axios-заголовок на весь час роботи сторінки
-        axios.defaults.headers.common['Authorization'] = 'Bearer ' + session.access_token;
-
-        document.getElementById('auth').style.display = 'none';
-        document.getElementById('app').style.display  = 'block';
-        initCalendar();
-      }
-    });
-  </script>
-
   <link href="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.css" rel="stylesheet">
-  <script src="https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/main.min.js"></script>
-  <script src="https://cdn.jsdelivr.net/npm/axios/dist/axios.min.js"></script>
   <style>
-    body { font-family: Arial; margin:20px; }
-    #app  { display:none; }
-    #calendar { max-width:600px; margin:0 auto; }
+    body { font-family: Arial; margin: 20px; }
+    #app { display: none; }
+    #calendar { max-width: 600px; margin: 0 auto; }
+    #form { display: none; margin-top: 20px; }
+    label { display: block; margin: 8px 0; }
+    #selected-date { font-weight: bold; }
   </style>
 </head>
 <body>
 
+  <!-- Блок авторизації -->
   <div id="auth">
     <h2>Увійдіть або зареєструйтесь</h2>
     <input id="email"    type="email"    placeholder="Email"><br>
@@ -45,12 +24,13 @@
     <button id="btn-signin">Увійти</button>
   </div>
 
+  <!-- Основний інтерфейс (прихований доти, доки не залоговані) -->
   <div id="app">
     <h1>Альтанка в City Lake</h1>
     <button id="btn-signout">Вийти</button>
     <div id="calendar"></div>
 
-    <div id="form" style="display:none; margin-top:20px;">
+    <div id="form">
       <h3>Бронювання</h3>
       <p>Дата: <span id="selected-date"></span></p>
       <form id="bookingForm">
@@ -73,54 +53,89 @@
     </div>
   </div>
 
+  <!-- ES-модулі -->
   <script type="module">
-    const { auth } = window.supabase;
+    import { createClient } from 'https://cdn.jsdelivr.net/npm/@supabase/supabase-js/+esm';
+    import axios from 'https://cdn.jsdelivr.net/npm/axios/+esm';
+    import FullCalendar from 'https://cdn.jsdelivr.net/npm/fullcalendar@5.11.0/+esm';
 
-    // Елементи
-    const btnUp = document.getElementById('btn-signup'),
-          btnIn = document.getElementById('btn-signin'),
-          btnOut= document.getElementById('btn-signout');
+    // Ключі беремо з Jinja-підстановок
+    const SUPABASE_URL     = "{{ supabase_url }}";
+    const SUPABASE_ANON    = "{{ supabase_anon }}";
+    const supabase = createClient(SUPABASE_URL, SUPABASE_ANON);
 
-    // Реєстрація і вхід
+    const authDiv = document.getElementById('auth');
+    const appDiv  = document.getElementById('app');
+    const btnUp   = document.getElementById('btn-signup');
+    const btnIn   = document.getElementById('btn-signin');
+    const btnOut  = document.getElementById('btn-signout');
+
+    // При зміні стану авторизації
+    supabase.auth.onAuthStateChange((event, session) => {
+      if (session) {
+        // ставимо заголовок для axios
+        axios.defaults.headers.common['Authorization'] = 'Bearer ' + session.access_token;
+        authDiv.style.display = 'none';
+        appDiv.style.display  = 'block';
+        initCalendar();
+      } else {
+        authDiv.style.display = 'block';
+        appDiv.style.display  = 'none';
+      }
+    });
+
+    // При завантаженні перевіримо наявний session
+    (async () => {
+      const { data: { session } } = await supabase.auth.getSession();
+      if (session) {
+        axios.defaults.headers.common['Authorization'] = 'Bearer ' + session.access_token;
+        authDiv.style.display = 'none';
+        appDiv.style.display  = 'block';
+        initCalendar();
+      }
+    })();
+
+    // Реєстрація
     btnUp.onclick = async () => {
       const email = document.getElementById('email').value;
       const pass  = document.getElementById('password').value;
-      const { error } = await auth.signUp({ email, password: pass });
+      const { error } = await supabase.auth.signUp({ email, password: pass });
       alert(error ? error.message : 'Перевірте пошту для підтвердження');
     };
+
+    // Вхід
     btnIn.onclick = async () => {
       const email = document.getElementById('email').value;
       const pass  = document.getElementById('password').value;
-      const { data, error } = await auth.signInWithPassword({ email, password: pass });
-      if (error) { alert(error.message); return; }
-      // Після успішного логіну — встановлюємо заголовок
-      axios.defaults.headers.common['Authorization'] = 'Bearer ' + data.session.access_token;
-      document.getElementById('auth').style.display = 'none';
-      document.getElementById('app').style.display  = 'block';
-      initCalendar();
-    };
-    btnOut.onclick = async () => {
-      await auth.signOut();
-      document.getElementById('app').style.display  = 'none';
-      document.getElementById('auth').style.display = 'block';
+      const { data, error } = await supabase.auth.signInWithPassword({ email, password: pass });
+      if (error) return alert(error.message);
+      // заголовок буде встановлено в onAuthStateChange
     };
 
+    // Вихід
+    btnOut.onclick = async () => {
+      await supabase.auth.signOut();
+    };
+
+    // Ініціалізація календаря та форми бронювання
     function initCalendar() {
-      // Заповнення селектів часу
-      const startSelect = document.getElementById('startTime'),
-            endSelect   = document.getElementById('endTime');
-      for(let h=9; h<=21; h++){
-        for(let m=0; m<60; m+=15){
-          const t=('0'+h).slice(-2)+':'+('0'+m).slice(-2);
-          [startSelect,endSelect].forEach(sel=>{
-            const o=document.createElement('option'); o.value=o.text=t; sel.appendChild(o);
+      // заповнюємо селекти часу
+      const startSelect = document.getElementById('startTime');
+      const endSelect   = document.getElementById('endTime');
+      for (let h = 9; h <= 21; h++) {
+        for (let m = 0; m < 60; m += 15) {
+          const t = ('0' + h).slice(-2) + ':' + ('0' + m).slice(-2);
+          [startSelect, endSelect].forEach(sel => {
+            const o = document.createElement('option');
+            o.value = o.text = t;
+            sel.appendChild(o);
           });
         }
       }
 
-      const calEl = document.getElementById('calendar');
+      const calendarEl = document.getElementById('calendar');
       let selectedDate;
-      const calendar = new FullCalendar.Calendar(calEl, {
+      const calendar = new FullCalendar.Calendar(calendarEl, {
         initialView: 'dayGridMonth',
         dateClick: info => {
           selectedDate = info.dateStr;
@@ -128,13 +143,15 @@
           document.getElementById('selected-date').innerText = selectedDate;
           document.getElementById('form').style.display = 'block';
         },
-        events: (_, cb) =>
-          axios.get('/api/bookings').then(r => cb(r.data))
+        events: (_, cb) => axios.get('/api/bookings').then(r => cb(r.data)),
+        eventClick: info => {
+          const ev = info.event.extendedProps;
+          alert(`Бронювання:\n${info.event.title}\nЧас: ${ev.time}\nКонтакт: ${ev.contact}`);
+        }
       });
       calendar.render();
 
-      // Обробка форми бронювання
-      document.getElementById('bookingForm').addEventListener('submit', e => {
+      document.getElementById('bookingForm').onsubmit = async e => {
         e.preventDefault();
         const payload = {
           date: document.getElementById('bdate').value,
@@ -142,18 +159,17 @@
           name: document.getElementById('bname').value,
           contact: document.getElementById('bcontact').value
         };
-        // axios вже має Authorization-заголовок
-        axios.post('/book', payload)
-          .then(() => {
-            window.location.href =
-              `/export_ics?date=${payload.date}&time=${payload.time}&name=${payload.name}`;
-          })
-          .catch(() => alert('Цей слот вже зайнятий'));
-      });
+        try {
+          await axios.post('/book', payload);
+          window.location.href = `/export_ics?date=${payload.date}&time=${payload.time}&name=${payload.name}`;
+        } catch {
+          alert('Цей слот уже зайнятий або ви не авторизовані');
+        }
+      };
 
-      document.getElementById('cancelBtn').addEventListener('click', () => {
+      document.getElementById('cancelBtn').onclick = () => {
         document.getElementById('form').style.display = 'none';
-      });
+      };
     }
   </script>
 </body>
